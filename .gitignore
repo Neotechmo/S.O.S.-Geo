@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Compilados y caché de Angular
+dist/
+.angular/
+out-tsc/
+
+# Variables de entorno y secretos (NUNCA subir credenciales reales)
+.env
+.env.*
+!.env.example
+
+# Carpeta temporal de referencias locales
+temp/
+/temp/
+
+# Logs y sistema operativo
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
