@@ -1,0 +1,116 @@
+@baseUrl = http://localhost:3000
+
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 1. Crear una categoría de respaldo para vincular al profesional (201 Created)
+# @name createCategory
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Soporte Tecnológico",
+  "description": "Redes, diagnóstico de equipos, servidores y rescate de datos.",
+  "color": "#7A5AF8",
+  "icon": "cpu"
+}
+
+### 2. Crear una zona de cobertura para vincular al profesional (201 Created)
+# @name createZone
+POST {{baseUrl}}/api/zones
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Zona Centro - León",
+  "description": "Cobertura centro histórico y zona piel",
+  "color": "#1570EF",
+  "coordinates": [
+    [
+      [-101.6900, 21.1300],
+      [-101.6700, 21.1300],
+      [-101.6700, 21.1150],
+      [-101.6900, 21.1150],
+      [-101.6900, 21.1300]
+    ]
+  ]
+}
+
+### 3. Crear profesional con referencias ObjectId a Category y Zone (201 Created)
+# @name createProfessional
+POST {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "fullName": "Ing. Carlos Méndez Rojas",
+  "specialty": "Redes empresariales y soporte en sitio",
+  "phone": "4771234567",
+  "email": "carlos.mendez@sosgeo.lasalle.mx",
+  "experienceYears": 8,
+  "status": "disponible",
+  "category": "{{createCategory.response.body.data.id}}",
+  "zone": "{{createZone.response.body.data.id}}"
+}
+
+### 4. Intentar crear profesional con correo duplicado (400 Bad Request)
+POST {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "fullName": "Otro Profesional",
+  "specialty": "Mantenimiento general",
+  "phone": "4777654321",
+  "email": "carlos.mendez@sosgeo.lasalle.mx",
+  "experienceYears": 4,
+  "category": "{{createCategory.response.body.data.id}}"
+}
+
+### 5. Intentar crear profesional con ObjectId de categoría inexistente en MongoDB (400 Bad Request)
+POST {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "fullName": "Lic. Ana Sofía Torres",
+  "specialty": "Diagnóstico de hardware",
+  "phone": "4779998877",
+  "email": "ana.torres@sosgeo.lasalle.mx",
+  "experienceYears": 5,
+  "category": "673f1a2b3c4d5e6f7a8b9c99"
+}
+
+### 6. Listar profesionales con category y zone poblados (populate) (200 OK)
+GET {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Filtrar profesionales por categoría y estado (200 OK)
+GET {{baseUrl}}/api/professionals?category={{createCategory.response.body.data.id}}&status=disponible
+Authorization: Bearer {{login.response.body.token}}
+
+### 8. Obtener profesional por ID con populate (200 OK)
+GET {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 9. Actualizar profesional parcialmente (200 OK)
+PATCH {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "en_servicio",
+  "experienceYears": 9
+}
+
+### 10. Eliminar profesional (200 OK)
+DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
