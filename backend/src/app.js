@@ -69,6 +69,7 @@ app.get("/", (req, res) => {
     endpoints: {
       health: "/api/health",
       auth: "/api/auth",
+      categories: "/api/categories",
     },
   });
 });
