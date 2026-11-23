@@ -1,0 +1,93 @@
+@baseUrl = http://localhost:3000
+
+### 0. Login para obtener el token (ejecutar primero; usa el usuario de auth.http)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 1. Crear categoría (201 Created)
+# @name createCategory
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Asistencia Automotriz",
+  "description": "Auxilio vial, paso de corriente, grúa y cambio de neumático.",
+  "color": "#D92D20",
+  "icon": "car"
+}
+
+### 2. Crear categoría con nombre duplicado, sin importar mayúsculas (400 Bad Request)
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "asistencia automotriz",
+  "description": "Intento de duplicar el nombre de la categoría.",
+  "color": "#000000",
+  "icon": "car"
+}
+
+### 3. Crear categoría con datos inválidos (400 Bad Request)
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "AB",
+  "description": "Corta",
+  "color": "rojo",
+  "icon": "",
+  "extra": true
+}
+
+### 4. Listar categorías (200 OK)
+GET {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+
+### 5. Obtener categoría por ID (200 OK)
+GET {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 6. Obtener categoría inexistente (404 Not Found)
+GET {{baseUrl}}/api/categories/673f1a2b3c4d5e6f7a8b9c99
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Obtener categoría con ID mal formado (400 Bad Request)
+GET {{baseUrl}}/api/categories/abc123
+Authorization: Bearer {{login.response.body.token}}
+
+### 8. Editar categoría parcialmente (200 OK)
+PATCH {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "color": "#B42318",
+  "isActive": false
+}
+
+### 9. Editar con color inválido (400 Bad Request)
+PATCH {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "color": "#12345"
+}
+
+### 10. Listar sin token (401 Unauthorized)
+GET {{baseUrl}}/api/categories
+
+### 11. Eliminar categoría sin registros asociados (200 OK)
+# Si la categoría está referenciada en ubicaciones, profesionales o solicitudes
+# la respuesta es 400 con el detalle de cuántos registros la usan.
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
