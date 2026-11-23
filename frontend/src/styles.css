@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f6f8; color: #172534; font: 1rem/1.5 system-ui, sans-serif; }
+button, input { font: inherit; }
+button { border: 0; border-radius: .5rem; padding: .55rem .85rem; background: #0b5c54; color: white; cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+:focus-visible { outline: 3px solid #347cc3; outline-offset: 3px; }
+.navbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; padding: 1rem clamp(1rem, 5vw, 4rem); background: #fff; border-bottom: 1px solid #dbe4ea; }
+.navbar a { color: inherit; text-decoration: none; }
+.navbar .brand { color: #0b5c54; font-size: 1.25rem; font-weight: 750; }
+.navbar nav { display: flex; flex-wrap: wrap; gap: .5rem; }
+.navbar nav a { border-radius: .5rem; padding: .4rem .65rem; }
+.navbar nav a:hover, .navbar nav .active { color: #084c45; background: #d9efe9; }
+.navbar .secondary { margin-inline-start: auto; background: #e9eef2; color: #172534; }
+main { max-width: 72rem; margin: 0 auto; padding: clamp(1rem, 4vw, 3rem); }
+.panel { background: white; border: 1px solid #dbe4ea; border-radius: .9rem; padding: clamp(1rem, 4vw, 2rem); }
+.panel h1 { margin-top: 0; }
+.auth-panel { max-width: 28rem; margin: 0 auto; }
+.auth-panel form { display: grid; gap: .65rem; }
+.auth-panel input { width: 100%; border: 1px solid #8799a7; border-radius: .5rem; padding: .55rem .7rem; }
+.auth-panel button { margin-top: .65rem; }
+.toast-stack { position: fixed; z-index: 10; right: 1rem; bottom: 1rem; display: grid; gap: .5rem; width: min(25rem, calc(100% - 2rem)); max-height: 60vh; overflow: auto; }
+.toast { display: flex; justify-content: space-between; align-items: start; gap: .75rem; padding: .65rem .85rem; border: 1px solid #6eaa96; border-radius: .65rem; background: #e5f6ee; color: #124a39; }
+.toast-error { background: #fcebea; color: #7d241f; border-color: #cc8580; }
+.toast p { margin: .15rem 0; overflow-wrap: anywhere; }
+.toast button { background: transparent; color: inherit; padding: 0 .4rem; }
