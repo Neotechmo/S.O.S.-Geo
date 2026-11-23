@@ -1,0 +1,108 @@
+@baseUrl = http://localhost:3000
+
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 1. Crear zona con GeoJSON Polygon cerrado en orden [longitud, latitud] (201 Created)
+# @name createZone
+POST {{baseUrl}}/api/zones
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Zona Norte - La Salle Campestre",
+  "description": "Cobertura prioritaria de asistencia en zona norte de León, Gto.",
+  "color": "#1570EF",
+  "coordinates": [
+    [
+      [-101.6950, 21.1550],
+      [-101.6750, 21.1550],
+      [-101.6750, 21.1400],
+      [-101.6950, 21.1400],
+      [-101.6950, 21.1550]
+    ]
+  ]
+}
+
+### 2. Crear zona con polígono NO cerrado: primer y último vértice distintos (400 Bad Request)
+POST {{baseUrl}}/api/zones
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Zona Polígono Abierto",
+  "coordinates": [
+    [
+      [-101.6950, 21.1550],
+      [-101.6750, 21.1550],
+      [-101.6750, 21.1400],
+      [-101.6950, 21.1400]
+    ]
+  ]
+}
+
+### 3. Crear zona con menos de 4 posiciones en el anillo (400 Bad Request)
+POST {{baseUrl}}/api/zones
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Zona Incompleta",
+  "coordinates": [
+    [
+      [-101.6950, 21.1550],
+      [-101.6750, 21.1550],
+      [-101.6950, 21.1550]
+    ]
+  ]
+}
+
+### 4. Crear zona con coordenadas fuera de rango [-180..180, -90..90] (400 Bad Request)
+POST {{baseUrl}}/api/zones
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Zona Coordenadas Inválidas",
+  "coordinates": [
+    [
+      [-210.0, 95.0],
+      [-101.6750, 21.1550],
+      [-101.6750, 21.1400],
+      [-210.0, 95.0]
+    ]
+  ]
+}
+
+### 5. Listar todas las zonas guardadas (200 OK)
+GET {{baseUrl}}/api/zones
+Authorization: Bearer {{login.response.body.token}}
+
+### 6. Obtener zonas como FeatureCollection GeoJSON (200 OK)
+GET {{baseUrl}}/api/zones/geojson
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Obtener zona por ID (200 OK)
+GET {{baseUrl}}/api/zones/{{createZone.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 8. Actualizar nombre y color de una zona (200 OK)
+PATCH {{baseUrl}}/api/zones/{{createZone.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Zona Norte - Campestre y Panorama",
+  "color": "#175CD3"
+}
+
+### 9. Eliminar zona y desvincular referencias en profesionales (200 OK)
+DELETE {{baseUrl}}/api/zones/{{createZone.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
