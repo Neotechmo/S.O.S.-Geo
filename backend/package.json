@@ -17,7 +17,7 @@
     "mongodb",
     "mongoose"
   ],
-  "author": "Universidad La Salle Bajío",
+  "author": "Kuripipeer",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
