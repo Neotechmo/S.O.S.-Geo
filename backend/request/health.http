@@ -1,0 +1,10 @@
+@baseUrl = http://localhost:3000
+
+### 1. Información general de la API
+GET {{baseUrl}}/
+
+### 2. Health check del servidor (200 OK)
+GET {{baseUrl}}/api/health
+
+### 3. Prueba de ruta inexistente (404 Not Found con AppError)
+GET {{baseUrl}}/api/ruta-que-no-existe
