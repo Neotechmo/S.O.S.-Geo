@@ -1,0 +1,83 @@
+@baseUrl = http://localhost:3000
+
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 1. Listar categorías disponibles para copiar un categoryId
+GET {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+
+### 2. Listar ubicaciones disponibles para copiar un locationId
+GET {{baseUrl}}/api/locations
+Authorization: Bearer {{login.response.body.token}}
+
+### 3. Listar profesionales disponibles para copiar un professionalId
+GET {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+
+### 4. Crear solicitud de servicio con referencias ObjectId (201 Created)
+# Reemplaza los IDs de ejemplo por los obtenidos en los pasos 1, 2 y 3
+# @name createServiceRequest
+POST {{baseUrl}}/api/service-requests
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Vehículo varado por batería descargada",
+  "description": "Se requiere paso de corriente en estacionamiento de Plaza Mayor.",
+  "priority": "alta",
+  "status": "pendiente",
+  "contactName": "Luis Fernando Pérez",
+  "contactPhone": "4771112233",
+  "category": "REEMPLAZAR_POR_CATEGORY_ID",
+  "location": "REEMPLAZAR_POR_LOCATION_ID",
+  "professional": "REEMPLAZAR_POR_PROFESSIONAL_ID"
+}
+
+### 5. Intentar crear solicitud con datos inválidos (400 Bad Request)
+POST {{baseUrl}}/api/service-requests
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "AB",
+  "description": "Corta",
+  "priority": "urgente",
+  "contactName": "Al",
+  "contactPhone": "123",
+  "category": "id-invalido",
+  "location": "id-invalido"
+}
+
+### 6. Listar solicitudes con category, location, professional y requestedBy poblados (200 OK)
+GET {{baseUrl}}/api/service-requests
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Filtrar solicitudes por estado y prioridad (200 OK)
+GET {{baseUrl}}/api/service-requests?status=pendiente&priority=alta
+Authorization: Bearer {{login.response.body.token}}
+
+### 8. Obtener solicitud por ID con populate (200 OK)
+GET {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 9. Actualizar estado y prioridad de la solicitud (200 OK)
+PATCH {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "en_proceso",
+  "priority": "critica"
+}
+
+### 10. Eliminar solicitud de servicio (200 OK)
+DELETE {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
