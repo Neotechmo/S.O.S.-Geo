@@ -26,8 +26,7 @@ export const routes: Routes = [
       {
         path: 'requests',
         title: 'Solicitudes | S.O.S. Geo',
-        data: { heading: 'Solicitudes', description: 'Consulta y administra las solicitudes de servicio.' },
-        loadComponent: () => import('./features/pending-page.component').then(m => m.PendingPageComponent),
+        loadComponent: () => import('./features/requests/requests-admin-page.component').then(m => m.RequestsAdminPageComponent),
       },
     ],
   },

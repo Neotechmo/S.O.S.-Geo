@@ -2,24 +2,9 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { getCountries, getCountryCallingCode, parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import { Observable, finalize, forkJoin } from 'rxjs';
+import { countryDialCodes, getDialPrefix, keepPhoneDigits, splitPhone, validatePhoneLength } from '../../shared/forms/phone';
 import { Category, DirectoryService, NamedRecord, Professional, professionalStatuses } from './directory.service';
-
-const regionNames = new Intl.DisplayNames('es', { type: 'region' });
-const countryDialCodes = getCountries().map(country => ({
-  country,
-  name: regionNames.of(country) ?? country,
-  dialCode: `+${getCountryCallingCode(country)}`,
-})).sort((left, right) => left.name.localeCompare(right.name, 'es'));
-
-const dialCodeByCountry = new Map<string, string>(
-  countryDialCodes.map(({ country, dialCode }) => [country, dialCode]),
-);
-
-function getDialPrefix(country: string): string {
-  return dialCodeByCountry.get(country) ?? (country === '+' ? '+' : '');
-}
 
 const categoryIcons = new Map([
   ['car', { label: 'Automóvil', path: 'M5 17h14a2 2 0 0 0 2-2v-3l-2-2-2-5H7l-2 5-2 2v3a2 2 0 0 0 2 2Zm0 0v2m14-2v2M5 10h14M7 14h1m8 0h1' }],
@@ -87,13 +72,7 @@ export class DirectoryAdminPageComponent {
     status: this.forms.control<Professional['status']>('disponible'),
     category: ['', Validators.required],
     zone: '',
-  }, {
-    validators: (form: AbstractControl) => {
-      const { phoneCountry, phone } = form.getRawValue();
-      const length = getDialPrefix(phoneCountry).length + phone.length;
-      return length >= 10 && length <= 15 ? null : { phoneLength: true };
-    },
-  });
+  }, { validators: validatePhoneLength });
 
   constructor() {
     this.load();
@@ -146,15 +125,11 @@ export class DirectoryAdminPageComponent {
 
   protected editProfessional(professional: Professional): void {
     this.professionalId.set(professional.id);
-    const phone = professional.phone.trim().replace(/[^0-9+]/g, '');
-    const parsedCountry = phone.startsWith('+') ? parsePhoneNumberFromString(phone)?.country : undefined;
-    const matchingCountry = parsedCountry ?? countryDialCodes.find(({ dialCode }) => phone.startsWith(dialCode))?.country;
-    const phoneCountry = matchingCountry ?? (phone.startsWith('+') ? '+' : '');
-    this.legacyDialCode.set(matchingCountry ? null : phoneCountry);
+    const { legacyDialCode, ...phoneFields } = splitPhone(professional.phone);
+    this.legacyDialCode.set(legacyDialCode);
     this.professionalForm.reset({
       ...professional,
-      phoneCountry,
-      phone: phone.slice(getDialPrefix(phoneCountry).length).replace(/[^0-9]/g, ''),
+      ...phoneFields,
       category: professional.category?.id ?? '',
       zone: professional.zone?.id ?? '',
     });
@@ -167,12 +142,7 @@ export class DirectoryAdminPageComponent {
   }
 
   protected keepPhoneDigits(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const digits = input.value.replace(/[^0-9]/g, '');
-    if (input.value !== digits) {
-      input.value = digits;
-      this.professionalForm.controls.phone.setValue(digits);
-    }
+    keepPhoneDigits(event, this.professionalForm.controls.phone);
   }
 
   protected saveProfessional(): void {
