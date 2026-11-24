@@ -7,7 +7,7 @@ import { NotificationService } from './notification.service';
 const TOKEN_KEY = 'sos-geo.token';
 const DEMO_SESSION_KEY = 'sos-geo.demo-session';
 
-interface LoginResponse {
+interface AuthResponse {
   token: string;
   message?: string;
 }
@@ -38,7 +38,18 @@ export class AuthService {
       return of(undefined);
     }
 
-    return this.http.post<LoginResponse>(`${environment.apiUrl}/auth/login`, { email, password }).pipe(
+    return this.authenticate('login', { email, password });
+  }
+
+  register(name: string, email: string, password: string) {
+    return this.authenticate('register', { name, email, password });
+  }
+
+  private authenticate(
+    action: 'login' | 'register',
+    payload: { name?: string; email: string; password: string },
+  ) {
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/${action}`, payload).pipe(
       map(({ token, message }) => {
         if (!token?.trim()) {
           const error = 'El servidor no devolvió un token de sesión.';
@@ -48,7 +59,8 @@ export class AuthService {
         this.logout();
         localStorage.setItem(TOKEN_KEY, token);
         this.storedToken.set(token);
-        this.notifications.success(message?.trim() || 'Sesión iniciada.');
+        this.notifications.success(message?.trim()
+          || (action === 'register' ? 'Cuenta creada.' : 'Sesión iniciada.'));
       }),
     );
   }

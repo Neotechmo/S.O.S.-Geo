@@ -4,7 +4,7 @@ import { authGuard } from './core/guards/auth.guard';
 export const routes: Routes = [
   {
     path: 'auth',
-    title: 'Iniciar sesión | S.O.S. Geo',
+    title: 'Acceso | S.O.S. Geo',
     loadComponent: () => import('./features/auth/auth-page.component').then(m => m.AuthPageComponent),
   },
   {
