@@ -15,8 +15,7 @@ export const routes: Routes = [
       {
         path: 'map',
         title: 'Mapa | S.O.S. Geo',
-        data: { heading: 'Mapa', description: 'Consulta las ubicaciones y zonas de servicio.' },
-        loadComponent: () => import('./features/pending-page.component').then(m => m.PendingPageComponent),
+        loadComponent: () => import('./features/map/map-dashboard-page.component').then(m => m.MapDashboardPageComponent),
       },
       {
         path: 'directory',
