@@ -18,8 +18,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);
   const notifications = inject(NotificationService);
   const router = inject(Router);
-  const isLogin = url.pathname === apiPath + '/auth/login';
-  const isPublicAuth = isLogin || url.pathname === apiPath + '/auth/register';
+  const isPublicAuth = url.pathname === apiPath + '/auth/login' || url.pathname === apiPath + '/auth/register';
   const token = isPublicAuth ? null : auth.token();
   const authorized = token
     ? request.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
@@ -28,7 +27,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   return next(authorized).pipe(
     tap({
       next: event => {
-        if (!(event instanceof HttpResponse) || isLogin || ['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
+        if (!(event instanceof HttpResponse) || isPublicAuth || ['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
         const body: unknown = event.body;
         if (body && typeof body === 'object' && 'message' in body) {
           const { message } = body;
