@@ -21,8 +21,7 @@ export const routes: Routes = [
       {
         path: 'directory',
         title: 'Directorio | S.O.S. Geo',
-        data: { heading: 'Directorio', description: 'Administra las categorías y los profesionales.' },
-        loadComponent: () => import('./features/pending-page.component').then(m => m.PendingPageComponent),
+        loadComponent: () => import('./features/directory/directory-admin-page.component').then(m => m.DirectoryAdminPageComponent),
       },
       {
         path: 'requests',
