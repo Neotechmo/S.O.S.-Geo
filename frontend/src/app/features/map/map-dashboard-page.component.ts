@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { AfterViewInit, Component, ComponentRef, DestroyRef, ElementRef, OnDestroy, ViewContainerRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import * as L from 'leaflet';
+import type { Polygon } from 'geojson';
 import '@geoman-io/leaflet-geoman-free';
 import { Observable, finalize, forkJoin, of } from 'rxjs';
 import { DirectoryService, NamedRecord } from '../directory/directory.service';
@@ -21,20 +22,20 @@ const kilometers = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 });
   template: `
     <h1>Mapa de ubicaciones</h1>
     <p>Haz clic en el mapa para registrar un punto. Abre un marcador para editarlo o eliminarlo.</p>
-    <app-location-filter-bar [categories]="categories()" [disabled]="loading() || busy() || drawingZone() || hasZoneDraft()"
+    <app-location-filter-bar [categories]="categories()" [disabled]="loading() || busy() || drawingZone() || hasZoneDraft() || relocating() || !!zoneEdit()"
       (filtersChange)="applyFilters($event)" />
     @if (loading()) { <p role="status">Cargando ubicaciones…</p> }
     @if (loadFailed()) {
       <p role="alert">{{ loaded() ? 'No se pudieron aplicar los filtros. Se mantienen los resultados anteriores.' : 'No se pudieron cargar las ubicaciones o categorías.' }}</p>
-      <button type="button" [disabled]="busy() || drawingZone() || hasZoneDraft()" (click)="load()">Reintentar</button>
+      <button type="button" [disabled]="busy() || drawingZone() || hasZoneDraft() || relocating() || !!zoneEdit()" (click)="load()">Reintentar</button>
     } @else if (!loading() && !categories().length) {
       <p>Registra una categoría en el directorio para agregar ubicaciones.</p>
     }
     <div class="zone-actions">
-      <button type="button" [disabled]="locating() || drawingZone() || hasZoneDraft() || busy()"
+      <button type="button" [disabled]="locating() || drawingZone() || hasZoneDraft() || busy() || relocating() || !!zoneEdit()"
         (click)="locateDevice()">{{ locating() ? 'Buscando tu ubicación…' : 'Mi ubicación' }}</button>
       <button type="button" [attr.aria-pressed]="drawingZone()"
-        [disabled]="!drawingZone() && (zonesLoading() || zonesFailed() || loading() || busy() || hasZoneDraft())"
+        [disabled]="!drawingZone() && (zonesLoading() || zonesFailed() || loading() || busy() || hasZoneDraft() || relocating() || !!zoneEdit())"
         (click)="toggleZoneDrawing()">Dibujar zona</button>
       @if (drawingZone()) {
         <span role="status">Pulsa un vértice para quitarlo. El primero cierra el polígono cuando hay al menos tres. Pulsa Dibujar zona de nuevo para descartar el trazo.</span>
@@ -42,9 +43,28 @@ const kilometers = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 });
       @if (zonesLoading()) { <span role="status">Cargando zonas…</span> }
       @if (zonesFailed()) {
         <span role="alert">No se pudieron cargar las zonas.</span>
-        <button type="button" (click)="loadZones()">Reintentar zonas</button>
+        <button type="button" [disabled]="!!zoneEdit()" (click)="loadZones()">Reintentar zonas</button>
       }
     </div>
+    @if (relocating()) {
+      <div class="zone-actions">
+        <span role="status">Selecciona la nueva ubicación en el mapa.</span>
+        <button type="button" [disabled]="!candidate()" (click)="finishRelocation(true)">Usar este punto</button>
+        <button type="button" (click)="finishRelocation(false)">Cancelar selección</button>
+      </div>
+    }
+    @if (zoneEdit(); as edit) {
+      <form class="panel zone-editor" (submit)="$event.preventDefault(); saveZoneEdit(zoneName.value)">
+        <h2>Editar zona</h2>
+        <label>Nombre de la zona <input #zoneName [value]="edit.zone.name" required maxlength="80" [disabled]="busy()"></label>
+        <p>Arrastra los vértices para ampliar o reducir la zona. Arrastra un punto intermedio para crear un vértice.</p>
+        <div class="zone-actions">
+          <button type="submit" [disabled]="busy()">{{ busy() ? 'Guardando…' : 'Guardar cambios' }}</button>
+          <button type="button" [disabled]="busy()" (click)="cancelZoneEdit()">Cancelar edición</button>
+        </div>
+        @if (zoneEditError()) { <p role="alert">{{ zoneEditError() }}</p> }
+      </form>
+    }
     @if (locationError()) { <p role="alert">{{ locationError() }}</p> }
     <div #mapCanvas class="map-canvas" role="region" aria-label="Mapa interactivo de ubicaciones"></div>
     <ng-container #popupHost />
@@ -60,7 +80,7 @@ const kilometers = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 });
           <ol class="nearby-list">
             @for (service of nearbyServices(); track service.location.id) {
               <li>
-                <button type="button" [disabled]="busy() || drawingZone() || hasZoneDraft()"
+                <button type="button" [disabled]="busy() || drawingZone() || hasZoneDraft() || relocating() || !!zoneEdit()"
                   (click)="showNearbyService(service.location)">{{ service.location.name }}</button>
                 <span>{{ formatDistance(service.meters) }} · {{ service.location.category?.name ?? 'Sin categoría' }}
                   · {{ statuses[service.location.status] }}</span>
@@ -81,6 +101,10 @@ const kilometers = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 });
     .zone-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin: .75rem 0; }
     .zone-actions button[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: 2px; }
     .map-canvas { height: clamp(24rem, 65vh, 44rem); border: 1px solid var(--border); border-radius: .9rem; z-index: 0; }
+    .zone-editor { margin-bottom: .75rem; }
+    .zone-editor h2 { margin-top: 0; font-size: 1.2rem; }
+    .zone-editor label { display: grid; gap: .25rem; max-width: 24rem; }
+    .zone-editor input { background: var(--background); color: var(--text); padding: .4rem .55rem; border: 1px solid var(--input-border); border-radius: .35rem; }
     .nearby-panel { margin-top: 1rem; }
     .nearby-panel h2 { margin: 0; font-size: 1.2rem; }
     .nearby-list { margin-bottom: 0; padding-inline-start: 1.5rem; }
@@ -100,6 +124,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   private map!: L.Map;
   private readonly zoneLayers = new Map<string, L.GeoJSON>();
   private deviceLayers?: L.LayerGroup;
+  private relocationMarker?: L.CircleMarker;
   private requestedFilters = emptyLocationFilters;
   private activePopup?: {
     popup: L.Popup;
@@ -114,10 +139,14 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   protected readonly loadFailed = signal(false);
   protected readonly loaded = signal(false);
   protected readonly busy = signal(false);
+  protected readonly relocating = signal(false);
+  protected readonly candidate = signal<Coordinates | null>(null);
   protected readonly drawingZone = signal(false);
   protected readonly hasZoneDraft = signal(false);
   protected readonly zonesLoading = signal(true);
   protected readonly zonesFailed = signal(false);
+  protected readonly zoneEdit = signal<{ zone: MapZone; draft: L.Polygon } | null>(null);
+  protected readonly zoneEditError = signal('');
   protected readonly locating = signal(false);
   protected readonly locationError = signal('');
   protected readonly devicePosition = signal<L.LatLng | null>(null);
@@ -144,8 +173,16 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(this.map);
     this.map.on('click', (event: L.LeafletMouseEvent) => {
-      if (this.loading() || !this.loaded() || this.busy() || this.drawingZone() || this.hasZoneDraft()) return;
+      if (this.loading() || !this.loaded() || this.busy() || this.drawingZone() || this.hasZoneDraft() || this.zoneEdit()) return;
       const { lng, lat } = event.latlng.wrap();
+      if (this.relocating()) {
+        this.candidate.set([lng, lat]);
+        this.relocationMarker?.remove();
+        this.relocationMarker = L.circleMarker([lat, lng], {
+          radius: 11, color: '#f97316', fillOpacity: .55, dashArray: '4 3', interactive: false,
+        }).addTo(this.map);
+        return;
+      }
       this.openPopup([lng, lat], null);
     });
     this.map.on('pm:drawend', () => this.drawingZone.set(false));
@@ -170,6 +207,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.zoneEdit()?.draft.pm.disable();
     this.activePopup?.observer.disconnect();
     this.map?.off('popupclose');
     this.map?.pm.disableDraw();
@@ -226,7 +264,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
           }).bindTooltip('Tu ubicación', { permanent: true, direction: 'top', offset: [0, -10] }),
         ]).addTo(this.map);
 
-        if (!this.drawingZone() && !this.hasZoneDraft() && !this.busy()) {
+        if (!this.drawingZone() && !this.hasZoneDraft() && !this.busy() && !this.relocating() && !this.zoneEdit()) {
           this.map.closePopup();
           const closest = this.nearbyServices()[0]?.location.location.coordinates;
           if (closest) {
@@ -258,7 +296,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   protected applyFilters(filters: LocationFilters): void {
-    if (this.loading() || this.busy() || this.drawingZone() || this.hasZoneDraft()) return;
+    if (this.loading() || this.busy() || this.drawingZone() || this.hasZoneDraft() || this.relocating() || this.zoneEdit()) return;
     this.requestedFilters = filters;
     this.load();
   }
@@ -278,8 +316,12 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   private upsertMarker(record: MapLocation): void {
     const [lng, lat] = record.location.coordinates;
     this.markers.get(record.id)?.marker.remove();
-    const marker = L.marker([lat, lng], { icon: this.markerIcon, title: record.name, alt: record.name })
-      .on('click', () => this.openPopup(record.location.coordinates, record))
+    const marker = L.marker([lat, lng], { icon: this.markerIcon, title: record.name, alt: record.name, bubblingMouseEvents: true })
+      .on('click', event => {
+        if (this.relocating()) return;
+        L.DomEvent.stopPropagation(event);
+        this.openPopup(record.location.coordinates, record);
+      })
       .addTo(this.map);
     const element = marker.getElement();
     element?.setAttribute('aria-label', record.name);
@@ -290,7 +332,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private openPopup([lng, lat]: Coordinates, record: MapLocation | null): void {
-    if (this.busy() || this.loading() || this.drawingZone() || this.hasZoneDraft()) return;
+    if (this.busy() || this.loading() || this.drawingZone() || this.hasZoneDraft() || this.relocating() || this.zoneEdit()) return;
     this.map.closePopup();
     if (record) this.focusLocation(lat, lng, 16);
     const component = this.popupHost().createComponent(LocationPopupComponent);
@@ -299,12 +341,40 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
     component.setInput('categories', this.categories());
     if (!record) component.instance.beginEdit();
 
-    const popup = L.popup({ className: 'location-popup', maxHeight: 360 }).setLatLng([lat, lng]);
-    component.instance.saved.subscribe(data => this.save(data, [lng, lat], record, component));
+    const popup = L.popup({ className: 'location-popup', maxHeight: 360, closeOnClick: false }).setLatLng([lat, lng]);
+    component.instance.saved.subscribe(({ data, coordinates }) => this.save(data, coordinates, record, component));
     component.instance.closed.subscribe(() => this.map.closePopup(popup));
-    component.instance.editStarted.subscribe(() => this.focusLocation(lat, lng, 17));
+    component.instance.editStarted.subscribe(() => {
+      const position = popup.getLatLng();
+      if (position) this.focusLocation(position.lat, position.lng, 17);
+    });
+    component.instance.moveRequested.subscribe(() => {
+      this.relocating.set(true);
+      popup.getElement()?.style.setProperty('visibility', 'hidden');
+    });
     if (record) component.instance.removed.subscribe(() => this.remove(record, component));
-    this.mountPopup(popup, component);
+    this.mountPopup(popup, component, () => this.clearRelocation());
+  }
+
+  protected finishRelocation(useCandidate: boolean): void {
+    const active = this.activePopup;
+    const candidate = this.candidate();
+    if (!this.relocating() || !active || (useCandidate && !candidate)) return;
+    const component = active.component.instance;
+    if (useCandidate && component instanceof LocationPopupComponent) {
+      component.selectedCoordinates.set(candidate);
+    }
+    this.clearRelocation();
+    active.popup.getElement()?.style.removeProperty('visibility');
+    active.popup.update();
+    active.popup.getElement()?.querySelector<HTMLElement>('input')?.focus({ preventScroll: true });
+  }
+
+  private clearRelocation(): void {
+    this.relocationMarker?.remove();
+    this.relocationMarker = undefined;
+    this.candidate.set(null);
+    this.relocating.set(false);
   }
 
   private mountPopup(popup: L.Popup, component: ComponentRef<LocationPopupComponent | ZonePopupComponent>,
@@ -359,9 +429,10 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private addZone(zone: MapZone): void {
+    this.zoneLayers.get(zone.id)?.remove();
     const layer = L.geoJSON(zone.area, { style: { color: zone.color, weight: 2, fillOpacity: .24 } })
       .on('click', (event: L.LeafletMouseEvent) => {
-        if (this.drawingZone()) return;
+        if (this.drawingZone() || this.relocating() || this.zoneEdit()) return;
         L.DomEvent.stopPropagation(event);
         if (!this.busy() && !this.hasZoneDraft()) this.openZonePopup(zone, event.latlng);
       })
@@ -370,16 +441,14 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private openZoneDraft(layer: L.Polygon): void {
-    const area = layer.toGeoJSON(false).geometry;
-    if (area.type !== 'Polygon') {
+    const area = this.readPolygon(layer);
+    if (!area) {
       layer.remove();
       return;
     }
 
     this.map.closePopup();
     this.hasZoneDraft.set(true);
-    // Leaflet can draw in a repeated world copy; MongoDB expects longitudes in [-180, 180].
-    area.coordinates = area.coordinates.map(ring => ring.map(([lng, lat]) => [L.Util.wrapNum(lng, [-180, 180], true), lat]));
     const position = layer.getBounds().getCenter();
     const component = this.popupHost().createComponent(ZonePopupComponent);
     const popup = L.popup({ className: 'location-popup', closeOnClick: false }).setLatLng(position);
@@ -401,6 +470,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
     const component = this.popupHost().createComponent(ZonePopupComponent);
     component.setInput('name', zone.name);
     const popup = L.popup({ className: 'location-popup' }).setLatLng(position);
+    component.instance.editRequested.subscribe(() => this.startZoneEdit(zone));
     component.instance.removed.subscribe(() => {
       this.mutate(this.zonesApi.delete(zone.id), component, () => {
         this.zoneLayers.get(zone.id)?.remove();
@@ -409,6 +479,78 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
       });
     });
     this.mountPopup(popup, component);
+  }
+
+  private startZoneEdit(zone: MapZone): void {
+    if (this.busy() || this.loading() || this.zoneEdit()) return;
+    this.map.closePopup();
+    this.zoneLayers.get(zone.id)?.remove();
+    const rings = zone.area.coordinates.map(ring => ring.map(([lng, lat]) => L.latLng(lat, lng)));
+    const draft = L.polygon(rings, { color: zone.color, weight: 2, fillOpacity: .24 }).addTo(this.map);
+    this.zoneEditError.set('');
+    this.zoneEdit.set({ zone, draft });
+    this.map.fitBounds(draft.getBounds(), { maxZoom: 17, padding: [35, 35] });
+    this.enableZoneVertexEditing(draft);
+  }
+
+  private enableZoneVertexEditing(draft: L.Polygon): void {
+    draft.pm.enable({ allowSelfIntersection: false, snappable: false, removeLayerBelowMinVertexCount: false });
+  }
+
+  protected cancelZoneEdit(): void {
+    const edit = this.zoneEdit();
+    if (!edit || this.busy()) return;
+    this.closeZoneEdit(edit.zone);
+  }
+
+  protected saveZoneEdit(value: string): void {
+    const edit = this.zoneEdit();
+    if (!edit || this.busy()) return;
+    const name = value.trim();
+    if (name.length < 3 || name.length > 80) {
+      this.zoneEditError.set('Escribe un nombre de 3 a 80 caracteres.');
+      return;
+    }
+    const area = this.readPolygon(edit.draft);
+    if (!area) {
+      this.zoneEditError.set('La zona debe conservar un polígono válido.');
+      return;
+    }
+
+    this.zoneEditError.set('');
+    this.busy.set(true);
+    edit.draft.pm.disable();
+    this.zonesApi.update(edit.zone.id, name, area).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.busy.set(false)),
+    ).subscribe({
+      next: saved => this.closeZoneEdit(saved),
+      error: (error: HttpErrorResponse) => {
+        this.zoneEditError.set(error.error?.error?.message ?? 'No se pudo guardar la zona.');
+        this.enableZoneVertexEditing(edit.draft);
+      },
+    });
+  }
+
+  private closeZoneEdit(zone: MapZone): void {
+    const edit = this.zoneEdit();
+    if (!edit) return;
+    edit.draft.pm.disable();
+    edit.draft.remove();
+    this.zoneEdit.set(null);
+    this.addZone(zone);
+    const center = this.zoneLayers.get(zone.id)?.getBounds().getCenter();
+    if (center) this.openZonePopup(zone, center);
+  }
+
+  private readPolygon(layer: L.Polygon): Polygon | null {
+    const area = layer.toGeoJSON(false).geometry;
+    if (area.type !== 'Polygon') return null;
+    // MongoDB expects longitudes in [-180, 180], including in repeated world copies.
+    return {
+      type: 'Polygon',
+      coordinates: area.coordinates.map(ring => ring.map(([lng, lat]) => [L.Util.wrapNum(lng, [-180, 180], true), lat])),
+    };
   }
 
   private focusLocation(lat: number, lng: number, minimumZoom: number): void {
@@ -422,7 +564,9 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
 
   private save(data: LocationInput, coordinates: Coordinates, record: MapLocation | null,
     component: ComponentRef<LocationPopupComponent>): void {
-    const request = record ? this.api.update(record.id, data) : this.api.create(data, coordinates);
+    const request = record
+      ? this.api.update(record.id, data, component.instance.selectedCoordinates() ?? undefined)
+      : this.api.create(data, coordinates);
     this.mutate(request, component, saved => {
       if (this.activePopup?.component !== component) return;
       if (!this.locations().includes(saved)) {
@@ -434,7 +578,11 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
         return;
       }
       component.setInput('record', saved);
+      component.setInput('coordinates', saved.location.coordinates);
+      component.instance.selectedCoordinates.set(null);
       component.instance.editing.set(false);
+      const [longitude, latitude] = saved.location.coordinates;
+      this.activePopup.popup.setLatLng([latitude, longitude]);
     });
   }
 

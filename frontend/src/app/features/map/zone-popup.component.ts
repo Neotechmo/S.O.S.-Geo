@@ -11,7 +11,10 @@ import { Component, input, output, signal } from '@angular/core';
           <button type="button" class="secondary" [disabled]="busy()" (click)="confirming.set(false)">Cancelar</button>
         </div>
       } @else {
-        <button type="button" class="secondary" [disabled]="busy()" (click)="confirming.set(true)">Eliminar zona</button>
+        <div class="actions">
+          <button type="button" [disabled]="busy()" (click)="editRequested.emit()">Editar zona</button>
+          <button type="button" class="secondary" [disabled]="busy()" (click)="confirming.set(true)">Eliminar zona</button>
+        </div>
       }
     } @else {
       <h2>Nueva zona</h2>
@@ -45,6 +48,7 @@ export class ZonePopupComponent {
   readonly name = input<string>();
   readonly saved = output<string>();
   readonly removed = output<void>();
+  readonly editRequested = output<void>();
   readonly closed = output<void>();
   readonly busy = signal(false);
   readonly error = signal('');

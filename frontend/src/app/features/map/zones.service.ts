@@ -24,6 +24,10 @@ export class ZonesService {
     return this.http.post<{ data: MapZone }>(this.url, { name, area }).pipe(map(response => response.data));
   }
 
+  update(id: string, name: string, area: Polygon) {
+    return this.http.patch<{ data: MapZone }>(`${this.url}/${id}`, { name, area }).pipe(map(response => response.data));
+  }
+
   delete(id: string) {
     return this.http.delete(`${this.url}/${id}`);
   }

@@ -12,6 +12,7 @@ const categoryIcons = new Map([
   ['zap', { label: 'Rayo', path: 'm13 2-9 12h7l-1 8 10-12h-7l1-8Z' }],
   ['key', { label: 'Llave', path: 'M15 3a6 6 0 0 0-5.6 8.2L3 17.6V21h4v-3h3v-3h2.5A6 6 0 1 0 15 3Zm2 5h.01' }],
   ['wrench', { label: 'Herramienta', path: 'M21 7a6 6 0 0 1-8 5.7L6 20a2 2 0 0 1-3-3l7.3-7A6 6 0 0 1 17 2l-4 4 1 3 3 1 4-4Z' }],
+  ['cpu', { label: 'Computadora', path: 'M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm8 13v4m-4 0h8' }],
 ]);
 
 function textLength(min: number, max: number) {
@@ -37,6 +38,7 @@ export class DirectoryAdminPageComponent {
   private readonly forms = inject(FormBuilder).nonNullable;
 
   protected readonly section = signal<'categories' | 'professionals'>('categories');
+  protected readonly saveError = signal('');
   protected readonly categories = signal<Category[]>([]);
   protected readonly professionals = signal<Professional[]>([]);
   protected readonly zones = signal<NamedRecord[]>([]);
@@ -98,9 +100,11 @@ export class DirectoryAdminPageComponent {
     });
   }
 
-  protected editCategory(category: Category): void {
-    this.categoryId.set(category.id);
+  protected openCategory(dialog: HTMLDialogElement, category?: Category): void {
+    this.categoryId.set(category?.id ?? null);
     this.categoryForm.reset(category);
+    this.saveError.set('');
+    dialog.showModal();
   }
 
   protected resetCategory(): void {
@@ -108,7 +112,12 @@ export class DirectoryAdminPageComponent {
     this.categoryForm.reset();
   }
 
-  protected saveCategory(): void {
+  protected cancelEditor(event: Event, dialog: HTMLDialogElement): void {
+    event.preventDefault();
+    if (!this.busy()) dialog.close();
+  }
+
+  protected saveCategory(dialog: HTMLDialogElement): void {
     this.categoryForm.markAllAsTouched();
     if (this.busy() || this.categoryForm.invalid) return;
     const { name, description, icon, ...fields } = this.categoryForm.getRawValue();
@@ -120,19 +129,25 @@ export class DirectoryAdminPageComponent {
         ? { ...row, category }
         : row));
       this.resetCategory();
-    });
+      dialog.close();
+    }, error => this.showSaveError(error));
   }
 
-  protected editProfessional(professional: Professional): void {
-    this.professionalId.set(professional.id);
-    const { legacyDialCode, ...phoneFields } = splitPhone(professional.phone);
-    this.legacyDialCode.set(legacyDialCode);
-    this.professionalForm.reset({
-      ...professional,
-      ...phoneFields,
-      category: professional.category?.id ?? '',
-      zone: professional.zone?.id ?? '',
-    });
+  protected openProfessional(dialog: HTMLDialogElement, professional?: Professional): void {
+    this.resetProfessional();
+    if (professional) {
+      this.professionalId.set(professional.id);
+      const { legacyDialCode, ...phoneFields } = splitPhone(professional.phone);
+      this.legacyDialCode.set(legacyDialCode);
+      this.professionalForm.reset({
+        ...professional,
+        ...phoneFields,
+        category: professional.category?.id ?? '',
+        zone: professional.zone?.id ?? '',
+      });
+    }
+    this.saveError.set('');
+    dialog.showModal();
   }
 
   protected resetProfessional(): void {
@@ -145,7 +160,7 @@ export class DirectoryAdminPageComponent {
     keepPhoneDigits(event, this.professionalForm.controls.phone);
   }
 
-  protected saveProfessional(): void {
+  protected saveProfessional(dialog: HTMLDialogElement): void {
     this.professionalForm.markAllAsTouched();
     if (this.busy() || this.professionalForm.invalid) return;
     const { fullName, specialty, phoneCountry, phone, email, zone, ...fields } = this.professionalForm.getRawValue();
@@ -155,7 +170,12 @@ export class DirectoryAdminPageComponent {
     }), professional => {
       this.professionals.update(rows => upsert(rows, professional, row => row.fullName));
       this.resetProfessional();
-    });
+      dialog.close();
+    }, error => this.showSaveError(error));
+  }
+
+  private showSaveError(error: HttpErrorResponse): void {
+    this.saveError.set(error.error?.error?.message || 'No se pudo guardar. Inténtalo de nuevo.');
   }
 
   protected deleteCategory(category: Category): void {
@@ -183,6 +203,7 @@ export class DirectoryAdminPageComponent {
 
   private mutate<T>(request: Observable<T>, next: (value: T) => void, error = (_: HttpErrorResponse) => {}): void {
     this.deleteError.set('');
+    this.saveError.set('');
     this.busy.set(true);
     request.pipe(
       takeUntilDestroyed(this.destroyRef),

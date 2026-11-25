@@ -1,4 +1,4 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { Coordinates, LocationInput, MapLocation, locationStatuses } from './locations.service';
 
@@ -30,7 +30,10 @@ import { Coordinates, LocationInput, MapLocation, locationStatuses } from './loc
             <p role="alert">{{ validationError() }}</p>
           }
           <div class="actions">
-            <button type="submit" [disabled]="!categories().length">Guardar</button>
+            @if (record()) {
+              <button type="button" class="secondary" (click)="moveRequested.emit()">Cambiar ubicación</button>
+            }
+            <button type="submit" [disabled]="!categories().length">{{ record() ? 'Guardar cambios' : 'Guardar' }}</button>
             <button type="button" class="secondary" (click)="cancel()">Cancelar</button>
           </div>
         </fieldset>
@@ -52,7 +55,10 @@ import { Coordinates, LocationInput, MapLocation, locationStatuses } from './loc
         </div>
       }
     }
-    <p class="coordinates">Latitud {{ coordinates()[1].toFixed(6) }} · Longitud {{ coordinates()[0].toFixed(6) }}</p>
+    <p class="coordinates">
+      @if (selectedCoordinates()) { Nueva ubicación sin guardar · }
+      Latitud {{ displayedCoordinates()[1].toFixed(6) }} · Longitud {{ displayedCoordinates()[0].toFixed(6) }}
+    </p>
     @if (busy()) { <p role="status">Procesando…</p> }
     @if (error()) { <p role="alert">{{ error() }}</p> }
   `,
@@ -77,14 +83,17 @@ export class LocationPopupComponent {
   readonly record = input<MapLocation | null>(null);
   readonly coordinates = input.required<Coordinates>();
   readonly categories = input<{ id: string; name: string }[]>([]);
-  readonly saved = output<LocationInput>();
+  readonly saved = output<{ data: LocationInput; coordinates: Coordinates }>();
   readonly removed = output<void>();
   readonly closed = output<void>();
   readonly editStarted = output<void>();
+  readonly moveRequested = output<void>();
 
   readonly busy = signal(false);
   readonly error = signal('');
   readonly editing = signal(false);
+  readonly selectedCoordinates = signal<Coordinates | null>(null);
+  protected readonly displayedCoordinates = computed(() => this.selectedCoordinates() ?? this.coordinates());
   protected readonly confirmingDelete = signal(false);
   protected readonly validationError = signal('');
   protected readonly statuses = locationStatuses;
@@ -97,6 +106,7 @@ export class LocationPopupComponent {
   });
 
   beginEdit(): void {
+    this.selectedCoordinates.set(null);
     const record = this.record();
     this.form.reset(record ? {
       name: record.name,
@@ -116,6 +126,7 @@ export class LocationPopupComponent {
       return;
     }
     this.editing.set(false);
+    this.selectedCoordinates.set(null);
     this.error.set('');
   }
 
@@ -131,6 +142,6 @@ export class LocationPopupComponent {
     }
 
     this.validationError.set('');
-    this.saved.emit({ ...values, name, description });
+    this.saved.emit({ data: { ...values, name, description }, coordinates: this.displayedCoordinates() });
   }
 }

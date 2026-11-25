@@ -1,7 +1,11 @@
 h1 { margin: 0 0 1rem; }
 h2 { margin: 0 0 1rem; font-size: 1.2rem; }
 .sections, .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-.sections, .editor { margin-bottom: 1rem; }
+.sections { margin-bottom: 1rem; }
+.list-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+.list-header h2 { margin: 0; }
+.editor { width: min(42rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; color: var(--text); }
+.editor::backdrop { background: #020617b3; }
 .sections button, .secondary, .danger {
   background: var(--background);
   border: 1px solid var(--border);

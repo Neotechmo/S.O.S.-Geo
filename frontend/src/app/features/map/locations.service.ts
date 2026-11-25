@@ -63,8 +63,9 @@ export class LocationsService {
     );
   }
 
-  update(id: string, data: LocationInput) {
-    return this.http.patch<{ data: MapLocation }>(`${this.url}/${id}`, data).pipe(
+  update(id: string, data: LocationInput, coordinates?: Coordinates) {
+    const body = coordinates ? { ...data, longitude: coordinates[0], latitude: coordinates[1] } : data;
+    return this.http.patch<{ data: MapLocation }>(`${this.url}/${id}`, body).pipe(
       map(response => response.data),
       tap(location => this.syncSaved(location)),
     );
