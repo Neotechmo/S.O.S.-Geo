@@ -2,8 +2,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { AfterViewInit, Component, ComponentRef, DestroyRef, ElementRef, OnDestroy, ViewContainerRef, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import * as L from 'leaflet';
+import '@geoman-io/leaflet-geoman-free';
 import { Observable, finalize, forkJoin, of } from 'rxjs';
 import { DirectoryService, NamedRecord } from '../directory/directory.service';
+import { ZonePopupComponent } from './zone-popup.component';
+import { enableDraftVertexRemoval } from './zone-draw-vertices';
+import { MapZone, ZonesService } from './zones.service';
 import { LocationFilterBarComponent } from './location-filter-bar.component';
 import { LocationPopupComponent } from './location-popup.component';
 import { LocationsRealtimeTableComponent } from './locations-realtime-table.component';
@@ -15,15 +19,28 @@ import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocat
   template: `
     <h1>Mapa de ubicaciones</h1>
     <p>Haz clic en el mapa para registrar un punto. Abre un marcador para editarlo o eliminarlo.</p>
-    <app-location-filter-bar [categories]="categories()" [disabled]="loading() || busy()"
+    <app-location-filter-bar [categories]="categories()" [disabled]="loading() || busy() || drawingZone() || hasZoneDraft()"
       (filtersChange)="applyFilters($event)" />
     @if (loading()) { <p role="status">Cargando ubicaciones…</p> }
     @if (loadFailed()) {
       <p role="alert">{{ loaded() ? 'No se pudieron aplicar los filtros. Se mantienen los resultados anteriores.' : 'No se pudieron cargar las ubicaciones o categorías.' }}</p>
-      <button type="button" (click)="load()">Reintentar</button>
+      <button type="button" [disabled]="busy() || drawingZone() || hasZoneDraft()" (click)="load()">Reintentar</button>
     } @else if (!loading() && !categories().length) {
       <p>Registra una categoría en el directorio para agregar ubicaciones.</p>
     }
+    <div class="zone-actions">
+      <button type="button" [attr.aria-pressed]="drawingZone()"
+        [disabled]="!drawingZone() && (zonesLoading() || zonesFailed() || loading() || busy() || hasZoneDraft())"
+        (click)="toggleZoneDrawing()">Dibujar zona</button>
+      @if (drawingZone()) {
+        <span role="status">Pulsa un vértice para quitarlo. El primero cierra el polígono cuando hay al menos tres. Pulsa Dibujar zona de nuevo para descartar el trazo.</span>
+      }
+      @if (zonesLoading()) { <span role="status">Cargando zonas…</span> }
+      @if (zonesFailed()) {
+        <span role="alert">No se pudieron cargar las zonas.</span>
+        <button type="button" (click)="loadZones()">Reintentar zonas</button>
+      }
+    </div>
     <div #mapCanvas class="map-canvas" role="region" aria-label="Mapa interactivo de ubicaciones"></div>
     <ng-container #popupHost />
     @if (loaded()) {
@@ -32,11 +49,14 @@ import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocat
   `,
   styles: `
     h1 { margin: 0; }
+    .zone-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin: .75rem 0; }
+    .zone-actions button[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: 2px; }
     .map-canvas { height: clamp(24rem, 65vh, 44rem); border: 1px solid var(--border); border-radius: .9rem; z-index: 0; }
   `,
 })
 export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   private readonly api = inject(LocationsService);
+  private readonly zonesApi = inject(ZonesService);
   private readonly directory = inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly canvas = viewChild.required<ElementRef<HTMLDivElement>>('mapCanvas');
@@ -44,8 +64,14 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   private readonly markers = new Map<string, { marker: L.Marker; record: MapLocation }>();
   private readonly markerIcon = L.divIcon({ className: 'location-marker', iconSize: [44, 44], iconAnchor: [22, 22] });
   private map!: L.Map;
+  private readonly zoneLayers = new Map<string, L.GeoJSON>();
   private requestedFilters = emptyLocationFilters;
-  private activePopup?: { popup: L.Popup; component: ComponentRef<LocationPopupComponent>; observer: ResizeObserver };
+  private activePopup?: {
+    popup: L.Popup;
+    component: ComponentRef<LocationPopupComponent | ZonePopupComponent>;
+    observer: ResizeObserver;
+    onClose?: () => void;
+  };
 
   protected readonly categories = signal<NamedRecord[]>([]);
   protected readonly locations = this.api.locations;
@@ -53,37 +79,53 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   protected readonly loadFailed = signal(false);
   protected readonly loaded = signal(false);
   protected readonly busy = signal(false);
+  protected readonly drawingZone = signal(false);
+  protected readonly hasZoneDraft = signal(false);
+  protected readonly zonesLoading = signal(true);
+  protected readonly zonesFailed = signal(false);
 
   constructor() {
     effect(() => this.syncMarkers(this.locations()));
   }
 
   ngAfterViewInit(): void {
-    this.map = L.map(this.canvas().nativeElement).setView([21.122, -101.682], 13);
+    this.map = L.map(this.canvas().nativeElement, { zoomControl: false }).setView([21.122, -101.682], 13);
+    L.control.zoom({ zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(this.map);
+    this.map.pm.setLang('es');
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(this.map);
     this.map.on('click', (event: L.LeafletMouseEvent) => {
-      if (this.loading() || !this.loaded() || this.busy()) return;
+      if (this.loading() || !this.loaded() || this.busy() || this.drawingZone() || this.hasZoneDraft()) return;
       const { lng, lat } = event.latlng.wrap();
       this.openPopup([lng, lat], null);
     });
+    this.map.on('pm:drawend', () => this.drawingZone.set(false));
+    enableDraftVertexRemoval(this.map);
+    this.map.on('pm:create', ({ layer }) => {
+      if (layer instanceof L.Polygon) this.openZoneDraft(layer);
+    });
     this.map.on('popupclose', (event: L.PopupEvent) => {
       if (this.activePopup?.popup !== event.popup) return;
-      this.activePopup.observer.disconnect();
-      this.popupHost().clear();
+      const { observer, onClose } = this.activePopup;
       this.activePopup = undefined;
+      observer.disconnect();
+      this.popupHost().clear();
+      onClose?.();
     });
     // The map container must be rendered before Leaflet can measure it.
     queueMicrotask(() => {
-      if (!this.destroyRef.destroyed) this.load();
+      if (this.destroyRef.destroyed) return;
+      this.load();
+      this.loadZones();
     });
   }
 
   ngOnDestroy(): void {
     this.activePopup?.observer.disconnect();
     this.map?.off('popupclose');
+    this.map?.pm.disableDraw();
     this.map?.remove();
   }
 
@@ -111,7 +153,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   protected applyFilters(filters: LocationFilters): void {
-    if (this.loading() || this.busy()) return;
+    if (this.loading() || this.busy() || this.drawingZone() || this.hasZoneDraft()) return;
     this.requestedFilters = filters;
     this.load();
   }
@@ -139,7 +181,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   }
 
   private openPopup([lng, lat]: Coordinates, record: MapLocation | null): void {
-    if (this.busy() || this.loading()) return;
+    if (this.busy() || this.loading() || this.drawingZone() || this.hasZoneDraft()) return;
     this.map.closePopup();
     if (record) this.focusLocation(lat, lng, 16);
     const component = this.popupHost().createComponent(LocationPopupComponent);
@@ -148,25 +190,116 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
     component.setInput('categories', this.categories());
     if (!record) component.instance.beginEdit();
 
-    const popup = L.popup({ className: 'location-popup', maxHeight: 360 })
-      .setLatLng([lat, lng])
-      .setContent(component.location.nativeElement);
-    const observer = new ResizeObserver(() => {
-      if (this.activePopup?.popup !== popup) return;
-      const focused = document.activeElement;
-      popup.update();
-      if (focused instanceof HTMLElement && component.location.nativeElement.contains(focused)) {
-        focused.focus({ preventScroll: true });
-      }
-    });
-    this.activePopup = { popup, component, observer };
+    const popup = L.popup({ className: 'location-popup', maxHeight: 360 }).setLatLng([lat, lng]);
     component.instance.saved.subscribe(data => this.save(data, [lng, lat], record, component));
     component.instance.closed.subscribe(() => this.map.closePopup(popup));
     component.instance.editStarted.subscribe(() => this.focusLocation(lat, lng, 17));
     if (record) component.instance.removed.subscribe(() => this.remove(record, component));
+    this.mountPopup(popup, component);
+  }
+
+  private mountPopup(popup: L.Popup, component: ComponentRef<LocationPopupComponent | ZonePopupComponent>,
+    onClose?: () => void): void {
+    const content = component.location.nativeElement as HTMLElement;
+    const observer = new ResizeObserver(() => {
+      if (this.activePopup?.popup !== popup) return;
+      const focused = document.activeElement;
+      popup.update();
+      if (focused instanceof HTMLElement && content.contains(focused)) {
+        focused.focus({ preventScroll: true });
+      }
+    });
+    this.activePopup = { popup, component, observer, onClose };
     component.changeDetectorRef.detectChanges();
-    popup.openOn(this.map);
-    observer.observe(component.location.nativeElement);
+    popup.setContent(content).openOn(this.map);
+    const popupElement = popup.getElement();
+    if (popupElement) {
+      // Cancel can detach the popup before Leaflet inspects the click target.
+      L.DomEvent.on(popupElement, 'click', L.DomEvent.stopPropagation);
+      popupElement.querySelector('.leaflet-popup-close-button')?.setAttribute('aria-label', 'Cerrar ventana');
+    }
+    observer.observe(content);
+  }
+
+  protected toggleZoneDrawing(): void {
+    if (this.drawingZone()) {
+      this.map.pm.disableDraw();
+      return;
+    }
+    this.map.closePopup();
+    this.drawingZone.set(true);
+    this.map.pm.enableDraw('Polygon', { allowSelfIntersection: false, snappable: false });
+  }
+
+  protected loadZones(): void {
+    this.zonesLoading.set(true);
+    this.zonesFailed.set(false);
+    this.zonesApi.list().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.zonesLoading.set(false)),
+    ).subscribe({
+      next: zones => {
+        for (const zone of zones) this.addZone(zone);
+        if (zones.length && !this.locations().length) {
+          const bounds = L.featureGroup([...this.zoneLayers.values()]).getBounds();
+          this.map.fitBounds(bounds, { maxZoom: 15, padding: [30, 30] });
+        }
+      },
+      error: () => this.zonesFailed.set(true),
+    });
+  }
+
+  private addZone(zone: MapZone): void {
+    const layer = L.geoJSON(zone.area, { style: { color: zone.color, weight: 2, fillOpacity: .24 } })
+      .on('click', (event: L.LeafletMouseEvent) => {
+        if (this.drawingZone()) return;
+        L.DomEvent.stopPropagation(event);
+        if (!this.busy() && !this.hasZoneDraft()) this.openZonePopup(zone, event.latlng);
+      })
+      .addTo(this.map);
+    this.zoneLayers.set(zone.id, layer);
+  }
+
+  private openZoneDraft(layer: L.Polygon): void {
+    const area = layer.toGeoJSON(false).geometry;
+    if (area.type !== 'Polygon') {
+      layer.remove();
+      return;
+    }
+
+    this.map.closePopup();
+    this.hasZoneDraft.set(true);
+    // Leaflet can draw in a repeated world copy; MongoDB expects longitudes in [-180, 180].
+    area.coordinates = area.coordinates.map(ring => ring.map(([lng, lat]) => [L.Util.wrapNum(lng, [-180, 180], true), lat]));
+    const position = layer.getBounds().getCenter();
+    const component = this.popupHost().createComponent(ZonePopupComponent);
+    const popup = L.popup({ className: 'location-popup', closeOnClick: false }).setLatLng(position);
+    component.instance.closed.subscribe(() => this.map.closePopup(popup));
+    component.instance.saved.subscribe(name => {
+      this.mutate(this.zonesApi.create(name, area), component, zone => {
+        this.addZone(zone);
+        if (this.activePopup?.component === component) this.openZonePopup(zone, position);
+      });
+    });
+    this.mountPopup(popup, component, () => {
+      layer.remove();
+      this.hasZoneDraft.set(false);
+    });
+  }
+
+  private openZonePopup(zone: MapZone, position: L.LatLng): void {
+    this.map.closePopup();
+    const component = this.popupHost().createComponent(ZonePopupComponent);
+    component.setInput('name', zone.name);
+    const popup = L.popup({ className: 'location-popup' }).setLatLng(position);
+    component.instance.removed.subscribe(() => {
+      this.mutate(this.zonesApi.delete(zone.id), component, () => {
+        this.zoneLayers.get(zone.id)?.remove();
+        this.zoneLayers.delete(zone.id);
+        if (this.activePopup?.component === component) this.map.closePopup(popup);
+      });
+    });
+    this.mountPopup(popup, component);
   }
 
   private focusLocation(lat: number, lng: number, minimumZoom: number): void {
@@ -202,7 +335,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private mutate<T>(request: Observable<T>, component: ComponentRef<LocationPopupComponent>,
+  private mutate<T>(request: Observable<T>, component: ComponentRef<LocationPopupComponent | ZonePopupComponent>,
     success: (value: T) => void): void {
     if (this.busy() || this.loading()) return;
     this.busy.set(true);
