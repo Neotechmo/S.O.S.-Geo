@@ -11,7 +11,7 @@ resource "aws_security_group" "sos_geo_sg" {
   }
 
   ingress {
-    description = "HTTP (redireccion y validacion Let's Encrypt)"
+    description = "HTTP (redireccion y validacion Lets Encrypt)"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -27,7 +27,7 @@ resource "aws_security_group" "sos_geo_sg" {
   }
 
   egress {
-    description = "Trafico saliente libre (MongoDB Atlas, npm, apt, Let's Encrypt)"
+    description = "Trafico saliente libre (MongoDB Atlas, npm, apt, Lets Encrypt)"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
