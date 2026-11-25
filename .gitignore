@@ -24,3 +24,13 @@ Thumbs.db
 .idea/
 
 .claude/
+
+# Terraform y llaves SSH (NUNCA subir secretos ni estado con credenciales)
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+!infra/terraform.tfvars.example
+*.pem
+
