@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { AfterViewInit, Component, ComponentRef, DestroyRef, ElementRef, OnDestroy, ViewContainerRef, effect, inject, signal, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ComponentRef, DestroyRef, ElementRef, OnDestroy, ViewContainerRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import * as L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
@@ -11,7 +11,9 @@ import { MapZone, ZonesService } from './zones.service';
 import { LocationFilterBarComponent } from './location-filter-bar.component';
 import { LocationPopupComponent } from './location-popup.component';
 import { LocationsRealtimeTableComponent } from './locations-realtime-table.component';
-import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocation, emptyLocationFilters } from './locations.service';
+import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocation, emptyLocationFilters, locationStatuses } from './locations.service';
+
+const kilometers = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 });
 
 @Component({
   imports: [LocationFilterBarComponent, LocationsRealtimeTableComponent],
@@ -29,6 +31,8 @@ import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocat
       <p>Registra una categoría en el directorio para agregar ubicaciones.</p>
     }
     <div class="zone-actions">
+      <button type="button" [disabled]="locating() || drawingZone() || hasZoneDraft() || busy()"
+        (click)="locateDevice()">{{ locating() ? 'Buscando tu ubicación…' : 'Mi ubicación' }}</button>
       <button type="button" [attr.aria-pressed]="drawingZone()"
         [disabled]="!drawingZone() && (zonesLoading() || zonesFailed() || loading() || busy() || hasZoneDraft())"
         (click)="toggleZoneDrawing()">Dibujar zona</button>
@@ -41,8 +45,33 @@ import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocat
         <button type="button" (click)="loadZones()">Reintentar zonas</button>
       }
     </div>
+    @if (locationError()) { <p role="alert">{{ locationError() }}</p> }
     <div #mapCanvas class="map-canvas" role="region" aria-label="Mapa interactivo de ubicaciones"></div>
     <ng-container #popupHost />
+    @if (devicePosition()) {
+      <section class="panel nearby-panel" aria-labelledby="nearby-services">
+        <h2 id="nearby-services">Servicios más cercanos</h2>
+        <p>Distancia en línea recta desde tu ubicación. Se aplican los filtros del mapa.</p>
+        @if (loading()) {
+          <p role="status">Cargando puntos de atención…</p>
+        } @else if (!loaded()) {
+          <p>Reintenta la carga de ubicaciones para ver los servicios cercanos.</p>
+        } @else if (nearbyServices().length) {
+          <ol class="nearby-list">
+            @for (service of nearbyServices(); track service.location.id) {
+              <li>
+                <button type="button" [disabled]="busy() || drawingZone() || hasZoneDraft()"
+                  (click)="showNearbyService(service.location)">{{ service.location.name }}</button>
+                <span>{{ formatDistance(service.meters) }} · {{ service.location.category?.name ?? 'Sin categoría' }}
+                  · {{ statuses[service.location.status] }}</span>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p>No hay puntos de atención para los filtros seleccionados.</p>
+        }
+      </section>
+    }
     @if (loaded()) {
       <app-locations-realtime-table [locations]="locations()" />
     }
@@ -52,6 +81,11 @@ import { Coordinates, LocationFilters, LocationInput, LocationsService, MapLocat
     .zone-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin: .75rem 0; }
     .zone-actions button[aria-pressed="true"] { outline: 2px solid var(--brand); outline-offset: 2px; }
     .map-canvas { height: clamp(24rem, 65vh, 44rem); border: 1px solid var(--border); border-radius: .9rem; z-index: 0; }
+    .nearby-panel { margin-top: 1rem; }
+    .nearby-panel h2 { margin: 0; font-size: 1.2rem; }
+    .nearby-list { margin-bottom: 0; padding-inline-start: 1.5rem; }
+    .nearby-list li + li { margin-top: .5rem; }
+    .nearby-list span { display: inline-block; margin-inline-start: .5rem; }
   `,
 })
 export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
@@ -65,6 +99,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   private readonly markerIcon = L.divIcon({ className: 'location-marker', iconSize: [44, 44], iconAnchor: [22, 22] });
   private map!: L.Map;
   private readonly zoneLayers = new Map<string, L.GeoJSON>();
+  private deviceLayers?: L.LayerGroup;
   private requestedFilters = emptyLocationFilters;
   private activePopup?: {
     popup: L.Popup;
@@ -83,6 +118,18 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
   protected readonly hasZoneDraft = signal(false);
   protected readonly zonesLoading = signal(true);
   protected readonly zonesFailed = signal(false);
+  protected readonly locating = signal(false);
+  protected readonly locationError = signal('');
+  protected readonly devicePosition = signal<L.LatLng | null>(null);
+  protected readonly statuses = locationStatuses;
+  protected readonly nearbyServices = computed(() => {
+    const position = this.devicePosition();
+    if (!position) return [];
+    return this.locations().map(location => {
+      const [lng, lat] = location.location.coordinates;
+      return { location, meters: position.distanceTo([lat, lng]) };
+    }).sort((left, right) => left.meters - right.meters).slice(0, 5);
+  });
 
   constructor() {
     effect(() => this.syncMarkers(this.locations()));
@@ -143,13 +190,71 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
       next: ({ locations, categories }) => {
         this.categories.set(categories);
         this.loaded.set(true);
-        if (locations.length) {
+        if (locations.length && !this.devicePosition()) {
           const points = locations.map(({ location: { coordinates: [lng, lat] } }) => L.latLng(lat, lng));
           this.map.fitBounds(L.latLngBounds(points), { maxZoom: 15, padding: [30, 30] });
         }
       },
       error: () => this.loadFailed.set(true),
     });
+  }
+
+  protected locateDevice(): void {
+    if (this.locating() || this.drawingZone() || this.hasZoneDraft() || this.busy()) return;
+    this.locationError.set('');
+    if (!window.isSecureContext) {
+      this.locationError.set('Abre la aplicación desde HTTPS o localhost para usar la ubicación del dispositivo.');
+      return;
+    }
+    if (!navigator.geolocation) {
+      this.locationError.set('Este navegador no permite obtener la ubicación del dispositivo.');
+      return;
+    }
+
+    this.locating.set(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (this.destroyRef.destroyed) return;
+        const position = L.latLng(coords.latitude, coords.longitude);
+        this.devicePosition.set(position);
+        this.locating.set(false);
+        this.deviceLayers?.remove();
+        this.deviceLayers = L.layerGroup([
+          L.circle(position, { radius: coords.accuracy, color: '#3b82f6', weight: 1, fillOpacity: .12, interactive: false }),
+          L.circleMarker(position, {
+            radius: 8, color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1, interactive: false,
+          }).bindTooltip('Tu ubicación', { permanent: true, direction: 'top', offset: [0, -10] }),
+        ]).addTo(this.map);
+
+        if (!this.drawingZone() && !this.hasZoneDraft() && !this.busy()) {
+          this.map.closePopup();
+          const closest = this.nearbyServices()[0]?.location.location.coordinates;
+          if (closest) {
+            const bounds = L.latLngBounds([position, L.latLng(closest[1], closest[0])]);
+            this.map.fitBounds(bounds, { maxZoom: 16, padding: [42, 42] });
+          } else {
+            this.map.setView(position, 16);
+          }
+        }
+      },
+      error => {
+        if (this.destroyRef.destroyed) return;
+        this.locating.set(false);
+        this.locationError.set(error.code === 1
+          ? 'Permite el acceso a tu ubicación en el navegador e inténtalo de nuevo.'
+          : 'No se pudo obtener tu ubicación. Inténtalo de nuevo.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  }
+
+  protected formatDistance(meters: number): string {
+    return meters < 1000 ? `${Math.round(meters)} m` : `${kilometers.format(meters / 1000)} km`;
+  }
+
+  protected showNearbyService(location: MapLocation): void {
+    this.openPopup(location.location.coordinates, location);
+    this.canvas().nativeElement.scrollIntoView({ block: 'nearest' });
   }
 
   protected applyFilters(filters: LocationFilters): void {
@@ -240,7 +345,7 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
     ).subscribe({
       next: zones => {
         for (const zone of zones) this.addZone(zone);
-        if (zones.length && !this.locations().length) {
+        if (zones.length && !this.locations().length && !this.devicePosition()) {
           const bounds = L.featureGroup([...this.zoneLayers.values()]).getBounds();
           this.map.fitBounds(bounds, { maxZoom: 15, padding: [30, 30] });
         }
