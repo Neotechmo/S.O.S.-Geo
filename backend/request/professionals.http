@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:3000
 
-### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http) (200 OK)
 # @name login
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
@@ -113,4 +113,17 @@ Content-Type: application/json
 
 ### 10. Eliminar profesional (200 OK)
 DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+
+### 11. Consultar profesional eliminado (404 Not Found)
+GET {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 12. Limpiar zona de prueba (200 OK)
+DELETE {{baseUrl}}/api/zones/{{createZone.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 13. Limpiar categoría de prueba (200 OK)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
 Authorization: Bearer {{login.response.body.token}}

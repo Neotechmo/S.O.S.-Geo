@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:3000
 
-### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http) (200 OK)
 # @name login
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
@@ -86,7 +86,7 @@ GET {{baseUrl}}/api/locations
 Authorization: Bearer {{login.response.body.token}}
 
 ### 7. Filtrar con los 3 filtros en backend: search + category + status (200 OK)
-GET {{baseUrl}}/api/locations?search=grúas&category={{createCategory.response.body.data.id}}&status=activo
+GET {{baseUrl}}/api/locations?search=gr%C3%BAas&category={{createCategory.response.body.data.id}}&status=activo
 Authorization: Bearer {{login.response.body.token}}
 
 ### 8. Búsqueda insensible a mayúsculas en name y description (200 OK)
@@ -125,6 +125,30 @@ Content-Type: application/json
   "latitude": 21.1300
 }
 
-### 14. Eliminar ubicación desde el popup (200 OK)
+### 14. Eliminar categoría referenciada por ubicación/profesional (400 Bad Request)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 15. Eliminar ubicación desde el popup (200 OK)
 DELETE {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+
+### 16. Consultar ubicación eliminada (404 Not Found)
+GET {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 17. ID de ubicación mal formado (400 Bad Request)
+GET {{baseUrl}}/api/locations/123
+Authorization: Bearer {{login.response.body.token}}
+
+### 18. Listar ubicaciones sin token (401 Unauthorized)
+GET {{baseUrl}}/api/locations
+
+### 19. Limpiar profesional de prueba (200 OK)
+DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 20. Limpiar categoría de prueba (200 OK)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
 Authorization: Bearer {{login.response.body.token}}

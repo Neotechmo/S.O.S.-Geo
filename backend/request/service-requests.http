@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:3000
 
-### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http) (200 OK)
 # @name login
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
@@ -10,20 +10,49 @@ Content-Type: application/json
   "password": "Password123!"
 }
 
-### 1. Listar categorías disponibles para copiar un categoryId
-GET {{baseUrl}}/api/categories
+### 1. Crear categoría de prueba (201 Created)
+# @name createCategory
+POST {{baseUrl}}/api/categories
 Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
 
-### 2. Listar ubicaciones disponibles para copiar un locationId
-GET {{baseUrl}}/api/locations
+{
+  "name": "Auxilio solicitudes QA",
+  "description": "Categoría temporal para pruebas de solicitudes.",
+  "color": "#1570ef",
+  "icon": "car"
+}
+
+### 2. Crear punto de atención de prueba (201 Created)
+# @name createLocation
+POST {{baseUrl}}/api/locations
 Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
 
-### 3. Listar profesionales disponibles para copiar un professionalId
-GET {{baseUrl}}/api/professionals
+{
+  "name": "Punto solicitudes QA",
+  "description": "Punto temporal para pruebas de solicitudes.",
+  "category": "{{createCategory.response.body.data.id}}",
+  "latitude": 21.1248,
+  "longitude": -101.6812
+}
+
+### 3. Crear profesional de prueba (201 Created)
+# @name createProfessional
+POST {{baseUrl}}/api/professionals
 Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
 
-### 4. Crear solicitud de servicio con referencias ObjectId (201 Created)
-# Reemplaza los IDs de ejemplo por los obtenidos en los pasos 1, 2 y 3
+{
+  "fullName": "Profesional solicitudes QA",
+  "specialty": "Auxilio vial",
+  "phone": "4775551234",
+  "email": "profesional-solicitudes@example.test",
+  "experienceYears": 3,
+  "category": "{{createCategory.response.body.data.id}}"
+}
+
+### 4. Crear solicitud de servicio con referencias pobladas (201 Created)
 # @name createServiceRequest
 POST {{baseUrl}}/api/service-requests
 Authorization: Bearer {{login.response.body.token}}
@@ -36,9 +65,9 @@ Content-Type: application/json
   "status": "pendiente",
   "contactName": "Luis Fernando Pérez",
   "contactPhone": "4771112233",
-  "category": "REEMPLAZAR_POR_CATEGORY_ID",
-  "location": "REEMPLAZAR_POR_LOCATION_ID",
-  "professional": "REEMPLAZAR_POR_PROFESSIONAL_ID"
+  "category": "{{createCategory.response.body.data.id}}",
+  "location": "{{createLocation.response.body.data.id}}",
+  "professional": "{{createProfessional.response.body.data.id}}"
 }
 
 ### 5. Intentar crear solicitud con datos inválidos (400 Bad Request)
@@ -80,4 +109,21 @@ Content-Type: application/json
 
 ### 10. Eliminar solicitud de servicio (200 OK)
 DELETE {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+
+### 11. Consultar solicitud eliminada (404 Not Found)
+GET {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 12. Limpiar profesional de prueba (200 OK)
+DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 13. Limpiar punto de atención de prueba (200 OK)
+DELETE {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 14. Limpiar categoría de prueba (200 OK)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
 Authorization: Bearer {{login.response.body.token}}

@@ -51,13 +51,13 @@ main { max-width: 72rem; margin: 0 auto; padding: clamp(1rem, 4vw, 3rem); }
   content: '';
   width: 1.5rem;
   height: 1.5rem;
-  background: var(--brand);
+  background: var(--location-marker-color, var(--brand));
   border: 2px solid var(--text);
   border-radius: 50%;
   box-shadow: 0 1px 5px #0008;
 }
 .location-marker:hover::before, .location-marker:focus-visible::before {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 55%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--location-marker-color, var(--brand)) 55%, transparent);
 }
 .location-popup .leaflet-popup-content-wrapper,
 .location-popup .leaflet-popup-tip { background: var(--surface); color: var(--text); }

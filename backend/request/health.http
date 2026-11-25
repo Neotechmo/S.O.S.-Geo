@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:3000
 
-### 1. Información general de la API
+### 1. Información general de la API (200 OK)
 GET {{baseUrl}}/
 
 ### 2. Health check del servidor (200 OK)
@@ -8,3 +8,10 @@ GET {{baseUrl}}/api/health
 
 ### 3. Prueba de ruta inexistente (404 Not Found con AppError)
 GET {{baseUrl}}/api/ruta-que-no-existe
+
+# El escenario 500 se verifica con npm run test:integration mediante un fallo controlado.
+### 4. JSON mal formado (400 Bad Request)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{ "email":
