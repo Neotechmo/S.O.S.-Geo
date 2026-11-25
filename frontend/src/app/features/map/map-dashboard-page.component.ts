@@ -281,7 +281,11 @@ export class MapDashboardPageComponent implements AfterViewInit, OnDestroy {
     const marker = L.marker([lat, lng], { icon: this.markerIcon, title: record.name, alt: record.name })
       .on('click', () => this.openPopup(record.location.coordinates, record))
       .addTo(this.map);
-    marker.getElement()?.setAttribute('aria-label', record.name);
+    const element = marker.getElement();
+    element?.setAttribute('aria-label', record.name);
+    if (record.category?.color) {
+      element?.style.setProperty('--location-marker-color', record.category.color);
+    }
     this.markers.set(record.id, { marker, record });
   }
 

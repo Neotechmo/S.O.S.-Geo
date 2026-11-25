@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:3000
 
-### 0. Login para obtener el token (ejecutar primero; usa el usuario de auth.http)
+### 0. Login para obtener el token (ejecutar primero; usa el usuario de auth.http) (200 OK)
 # @name login
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json

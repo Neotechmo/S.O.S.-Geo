@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:3000
 
-### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http)
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http) (200 OK)
 # @name login
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
@@ -105,4 +105,9 @@ Content-Type: application/json
 
 ### 9. Eliminar zona y desvincular referencias en profesionales (200 OK)
 DELETE {{baseUrl}}/api/zones/{{createZone.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+
+### 10. Consultar zona eliminada (404 Not Found)
+GET {{baseUrl}}/api/zones/{{createZone.response.body.data.id}}
 Authorization: Bearer {{login.response.body.token}}
