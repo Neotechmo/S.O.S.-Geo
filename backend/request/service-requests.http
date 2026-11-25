@@ -1,0 +1,129 @@
+@baseUrl = http://localhost:3000
+
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http) (200 OK)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 1. Crear categoría de prueba (201 Created)
+# @name createCategory
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Auxilio solicitudes QA",
+  "description": "Categoría temporal para pruebas de solicitudes.",
+  "color": "#1570ef",
+  "icon": "car"
+}
+
+### 2. Crear punto de atención de prueba (201 Created)
+# @name createLocation
+POST {{baseUrl}}/api/locations
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Punto solicitudes QA",
+  "description": "Punto temporal para pruebas de solicitudes.",
+  "category": "{{createCategory.response.body.data.id}}",
+  "latitude": 21.1248,
+  "longitude": -101.6812
+}
+
+### 3. Crear profesional de prueba (201 Created)
+# @name createProfessional
+POST {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "fullName": "Profesional solicitudes QA",
+  "specialty": "Auxilio vial",
+  "phone": "4775551234",
+  "email": "profesional-solicitudes@example.test",
+  "experienceYears": 3,
+  "category": "{{createCategory.response.body.data.id}}"
+}
+
+### 4. Crear solicitud de servicio con referencias pobladas (201 Created)
+# @name createServiceRequest
+POST {{baseUrl}}/api/service-requests
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Vehículo varado por batería descargada",
+  "description": "Se requiere paso de corriente en estacionamiento de Plaza Mayor.",
+  "priority": "alta",
+  "status": "pendiente",
+  "contactName": "Luis Fernando Pérez",
+  "contactPhone": "4771112233",
+  "category": "{{createCategory.response.body.data.id}}",
+  "location": "{{createLocation.response.body.data.id}}",
+  "professional": "{{createProfessional.response.body.data.id}}"
+}
+
+### 5. Intentar crear solicitud con datos inválidos (400 Bad Request)
+POST {{baseUrl}}/api/service-requests
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "AB",
+  "description": "Corta",
+  "priority": "urgente",
+  "contactName": "Al",
+  "contactPhone": "123",
+  "category": "id-invalido",
+  "location": "id-invalido"
+}
+
+### 6. Listar solicitudes con category, location, professional y requestedBy poblados (200 OK)
+GET {{baseUrl}}/api/service-requests
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Filtrar solicitudes por estado y prioridad (200 OK)
+GET {{baseUrl}}/api/service-requests?status=pendiente&priority=alta
+Authorization: Bearer {{login.response.body.token}}
+
+### 8. Obtener solicitud por ID con populate (200 OK)
+GET {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 9. Actualizar estado y prioridad de la solicitud (200 OK)
+PATCH {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "en_proceso",
+  "priority": "critica"
+}
+
+### 10. Eliminar solicitud de servicio (200 OK)
+DELETE {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+
+### 11. Consultar solicitud eliminada (404 Not Found)
+GET {{baseUrl}}/api/service-requests/{{createServiceRequest.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 12. Limpiar profesional de prueba (200 OK)
+DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 13. Limpiar punto de atención de prueba (200 OK)
+DELETE {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 14. Limpiar categoría de prueba (200 OK)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}

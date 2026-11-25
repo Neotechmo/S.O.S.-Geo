@@ -1,0 +1,154 @@
+@baseUrl = http://localhost:3000
+
+### 0. Login para obtener el token JWT (usa el usuario registrado en auth.http) (200 OK)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 1. Crear una categoría para vincular a la ubicación (201 Created)
+# @name createCategory
+POST {{baseUrl}}/api/categories
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Asistencia Automotriz",
+  "description": "Auxilio vial, grúas, paso de corriente y cambio de neumático.",
+  "color": "#D92D20",
+  "icon": "car"
+}
+
+### 2. Crear un profesional para asignarlo como responsable (201 Created)
+# @name createProfessional
+POST {{baseUrl}}/api/professionals
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "fullName": "Ing. Laura Gómez Ruiz",
+  "specialty": "Mecánica y auxilio vial",
+  "phone": "4775551234",
+  "email": "laura.gomez@sosgeo.lasalle.mx",
+  "experienceYears": 6,
+  "category": "{{createCategory.response.body.data.id}}"
+}
+
+### 3. Registrar ubicación exacta desde clic en el mapa (201 Created, category poblada)
+# @name createLocation
+POST {{baseUrl}}/api/locations
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Base Grúas Express Bajío",
+  "description": "Auxilio vial, cambio de neumático y remolque ligero 24/7.",
+  "category": "{{createCategory.response.body.data.id}}",
+  "status": "activo",
+  "contactPhone": "4779876543",
+  "primaryProfessional": "{{createProfessional.response.body.data.id}}",
+  "latitude": 21.1248,
+  "longitude": -101.6812
+}
+
+### 4. Intentar registrar con coordenadas fuera de rango (400 Bad Request)
+POST {{baseUrl}}/api/locations
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Punto inválido",
+  "description": "Coordenadas fuera del rango permitido por GeoJSON.",
+  "category": "{{createCategory.response.body.data.id}}",
+  "latitude": 120,
+  "longitude": -250
+}
+
+### 5. Intentar registrar con categoría inexistente en MongoDB (400 Bad Request)
+POST {{baseUrl}}/api/locations
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Taller sin categoría",
+  "description": "La categoría enviada no existe en la base de datos.",
+  "category": "673f1a2b3c4d5e6f7a8b9c99",
+  "latitude": 21.13,
+  "longitude": -101.68
+}
+
+### 6. Listar ubicaciones con category, primaryProfessional y registeredBy poblados (200 OK)
+GET {{baseUrl}}/api/locations
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Filtrar con los 3 filtros en backend: search + category + status (200 OK)
+GET {{baseUrl}}/api/locations?search=gr%C3%BAas&category={{createCategory.response.body.data.id}}&status=activo
+Authorization: Bearer {{login.response.body.token}}
+
+### 8. Búsqueda insensible a mayúsculas en name y description (200 OK)
+GET {{baseUrl}}/api/locations?search=REMOLQUE
+Authorization: Bearer {{login.response.body.token}}
+
+### 9. Filtro con estado inválido (400 Bad Request)
+GET {{baseUrl}}/api/locations?status=abierto
+Authorization: Bearer {{login.response.body.token}}
+
+### 10. FeatureCollection GeoJSON filtrada para Leaflet (200 OK)
+GET {{baseUrl}}/api/locations/geojson?status=activo
+Authorization: Bearer {{login.response.body.token}}
+
+### 11. Obtener ubicación por ID (200 OK)
+GET {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 12. Editar ubicación desde el popup: estado y nueva posición (200 OK)
+PATCH {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "status": "en_servicio",
+  "latitude": 21.1260,
+  "longitude": -101.6800
+}
+
+### 13. Intentar mover con una sola coordenada (400 Bad Request)
+PATCH {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "latitude": 21.1300
+}
+
+### 14. Eliminar categoría referenciada por ubicación/profesional (400 Bad Request)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 15. Eliminar ubicación desde el popup (200 OK)
+DELETE {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+
+### 16. Consultar ubicación eliminada (404 Not Found)
+GET {{baseUrl}}/api/locations/{{createLocation.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 17. ID de ubicación mal formado (400 Bad Request)
+GET {{baseUrl}}/api/locations/123
+Authorization: Bearer {{login.response.body.token}}
+
+### 18. Listar ubicaciones sin token (401 Unauthorized)
+GET {{baseUrl}}/api/locations
+
+### 19. Limpiar profesional de prueba (200 OK)
+DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 20. Limpiar categoría de prueba (200 OK)
+DELETE {{baseUrl}}/api/categories/{{createCategory.response.body.data.id}}
+Authorization: Bearer {{login.response.body.token}}

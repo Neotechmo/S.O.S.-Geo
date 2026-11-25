@@ -1,0 +1,8 @@
+aws_region     = "us-east-1"
+instance_type  = "t3.small"
+domain_name    = "sosgeo.neotechmo.top"
+git_branch     = "dev"
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... tu-llave-publica"
+mongodb_uri    = "mongodb+srv://<Usuario>:<Contraseña>@<Cluster>.mongodb.net/sos_geo_db"
+jwt_secret     = "reemplazar_por_secreto_jwt_largo_y_seguro"
+jwt_expires_in = "8h"

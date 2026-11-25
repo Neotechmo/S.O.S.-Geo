@@ -1,0 +1,65 @@
+@import 'leaflet/dist/leaflet.css';
+@import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
+
+:root {
+  color-scheme: dark;
+  --brand: #6366f1;
+  --navigation: #3b82f6;
+  --status: #10b981;
+  --alert: #f97316;
+  --background: #0f172a;
+  --surface: #1e293b;
+  --text: #f8fafc;
+  --border: #475569;
+  --input-border: #64748b;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--text); font: 1rem/1.5 system-ui, sans-serif; }
+button, input { font: inherit; }
+button { border: 0; border-radius: .5rem; padding: .55rem .85rem; background: color-mix(in srgb, var(--brand) 84%, var(--background)); color: var(--text); cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+:focus-visible { outline: 3px solid var(--navigation); outline-offset: 3px; }
+.navbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; padding: 1rem clamp(1rem, 5vw, 4rem); background: var(--surface); border-bottom: 1px solid var(--border); }
+.navbar a { color: inherit; text-decoration: none; }
+.navbar .brand { color: color-mix(in srgb, var(--brand) 65%, var(--text)); font-size: 1.25rem; font-weight: 750; }
+.navbar nav { display: flex; flex-wrap: wrap; gap: .5rem; }
+.navbar nav a { border-radius: .5rem; padding: .4rem .65rem; }
+.navbar nav a:hover, .navbar nav .active {
+  background: color-mix(in srgb, var(--navigation) 18%, var(--background));
+  box-shadow: inset 0 -2px var(--navigation);
+}
+.navbar .secondary { margin-inline-start: auto; background: var(--background); color: var(--text); border: 1px solid var(--border); }
+main { max-width: 72rem; margin: 0 auto; padding: clamp(1rem, 4vw, 3rem); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: .9rem; padding: clamp(1rem, 4vw, 2rem); }
+.panel h1 { margin-top: 0; }
+.auth-panel { max-width: 28rem; margin: 0 auto; }
+.auth-panel form { display: grid; gap: .65rem; }
+.auth-panel input { width: 100%; background: var(--background); color: var(--text); border: 1px solid var(--input-border); border-radius: .5rem; padding: .55rem .7rem; }
+.auth-panel button { margin-top: .65rem; }
+.toast-stack { position: fixed; z-index: 10; right: 1rem; bottom: 1rem; display: grid; gap: .5rem; width: min(25rem, calc(100% - 2rem)); max-height: 60vh; overflow: auto; }
+.toast { display: flex; justify-content: space-between; align-items: start; gap: .75rem; padding: .65rem .85rem; border: 1px solid var(--status); border-radius: .65rem; background: var(--surface); color: var(--text); }
+.toast-error { border-color: var(--alert); }
+.toast p { margin: .15rem 0; overflow-wrap: anywhere; }
+.toast button { background: transparent; color: inherit; padding: 0 .4rem; }
+.auth-panel input[aria-invalid="true"] { border-color: var(--alert); }
+.auth-panel small { color: color-mix(in srgb, var(--alert) 80%, var(--text)); }
+.auth-panel .auth-switch { margin-top: 1rem; background: var(--background); color: var(--text); border: 1px solid var(--border); }
+
+.location-marker { display: grid; place-items: center; border-radius: 50%; }
+.location-marker::before {
+  content: '';
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--location-marker-color, var(--brand));
+  border: 2px solid var(--text);
+  border-radius: 50%;
+  box-shadow: 0 1px 5px #0008;
+}
+.location-marker:hover::before, .location-marker:focus-visible::before {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--location-marker-color, var(--brand)) 55%, transparent);
+}
+.location-popup .leaflet-popup-content-wrapper,
+.location-popup .leaflet-popup-tip { background: var(--surface); color: var(--text); }
+.location-popup .leaflet-popup-content { margin: 1rem; }
+.location-popup.leaflet-popup a.leaflet-popup-close-button { color: var(--text); }

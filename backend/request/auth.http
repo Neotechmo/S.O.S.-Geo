@@ -1,0 +1,62 @@
+@baseUrl = http://localhost:3000
+
+### 1. Registro de usuario (201 Created)
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Usuario Prueba",
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 2. Registro con correo duplicado (400 Bad Request)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Usuario Prueba",
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 3. Registro con datos inválidos (400 Bad Request)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "AB",
+  "email": "correo-invalido",
+  "password": "123"
+}
+
+### 4. Login exitoso (200 OK + token JWT)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "Password123!"
+}
+
+### 5. Login con contraseña incorrecta (401 Unauthorized)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "prueba@sosgeo.lasalle.mx",
+  "password": "ContraseñaIncorrecta"
+}
+
+### 6. Perfil del usuario autenticado (200 OK)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Perfil sin token (401 Unauthorized)
+GET {{baseUrl}}/api/auth/me
+
+### 8. Perfil con token inválido (401 Unauthorized)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer token-invalido

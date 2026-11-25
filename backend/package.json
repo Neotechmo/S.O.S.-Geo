@@ -1,0 +1,36 @@
+{
+  "name": "sos-geo-backend",
+  "version": "1.0.0",
+  "description": "API REST georreferenciada para S.O.S. Geo con Node.js, Express y MongoDB Atlas",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "seed": "node src/data/seed.js",
+    "test:integration": "node --test request/integration.test.cjs",
+    "qa:atlas": "node request/verify-atlas.cjs"
+  },
+  "keywords": [
+    "node",
+    "express",
+    "leaflet",
+    "geojson",
+    "georreferenciacion",
+    "mongodb",
+    "mongoose"
+  ],
+  "author": "Kuripipeer",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.6",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.15.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

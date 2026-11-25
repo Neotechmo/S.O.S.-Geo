@@ -1,0 +1,175 @@
+<h1>Solicitudes de servicio</h1>
+
+@if (catalogFailed()) {
+  <p role="alert">No se pudieron cargar las categorías, los puntos de atención o los profesionales.</p>
+  <button type="button" (click)="load()">Reintentar</button>
+} @else {
+  <section class="panel" aria-labelledby="request-editor">
+    <h2 id="request-editor">{{ editingId() ? 'Editar solicitud' : 'Nueva solicitud' }}</h2>
+    <form [formGroup]="editor" (ngSubmit)="save()">
+      <fieldset [disabled]="loading() || busy()">
+        <label>Título <input #titleInput formControlName="title" required maxlength="90"></label>
+        <label>Contacto <input formControlName="contactName" required maxlength="80"></label>
+        <label>Lada internacional
+          <select formControlName="phoneCountry">
+            @for (option of dialCodes; track option.country) {
+              <option [value]="option.country">{{ option.name }} ({{ option.dialCode }})</option>
+            }
+            @if (legacyDialCode() === '') {
+              <option value="">Sin lada internacional (número guardado)</option>
+            } @else if (legacyDialCode() === '+') {
+              <option value="+">Número internacional guardado (+)</option>
+            }
+          </select>
+        </label>
+        <label>Teléfono de contacto
+          <input type="tel" inputmode="numeric" autocomplete="tel-national"
+            formControlName="phone" required (input)="keepPhoneDigits($event)">
+        </label>
+        <label class="wide">Descripción <textarea formControlName="description" required maxlength="300" rows="3"></textarea></label>
+        <label>Categoría
+          <select formControlName="category" required>
+            <option value="" disabled>Selecciona una categoría</option>
+            @for (category of categories(); track category.id) {
+              <option [value]="category.id">{{ category.name }}</option>
+            }
+          </select>
+        </label>
+        <label>Punto de atención
+          <select formControlName="location" required>
+            <option value="" disabled>Selecciona un punto</option>
+            @for (location of locations(); track location.id) {
+              <option [value]="location.id">{{ location.name }}</option>
+            }
+          </select>
+        </label>
+        <label>Profesional
+          <select formControlName="professional">
+            <option value="">Sin asignar</option>
+            @for (professional of professionals(); track professional.id) {
+              <option [value]="professional.id">{{ professional.fullName }}</option>
+            }
+          </select>
+        </label>
+        <label>Estado
+          <select formControlName="status">
+            @for (status of statusOptions; track status) {
+              <option [value]="status">{{ statuses[status] }}</option>
+            }
+          </select>
+        </label>
+        <label>Prioridad
+          <select formControlName="priority">
+            @for (priority of priorityOptions; track priority) {
+              <option [value]="priority">{{ priorities[priority] }}</option>
+            }
+          </select>
+        </label>
+        @if (!loading() && (!categories().length || !locations().length)) {
+          <p class="wide">Para registrar una solicitud debe existir al menos una categoría y un punto de atención.</p>
+        }
+        @if (editor.touched && editor.invalid) {
+          <ul class="wide alert" aria-label="Campos por corregir">
+            @if (editor.controls.title.invalid) { <li>Título de 4 a 90 caracteres.</li> }
+            @if (editor.controls.description.invalid) { <li>Descripción de 10 a 300 caracteres.</li> }
+            @if (editor.controls.contactName.invalid) { <li>Nombre de contacto de 3 a 80 caracteres.</li> }
+            @if (editor.controls.phone.invalid) {
+              <li>Escribe el teléfono de contacto usando solo dígitos.</li>
+            } @else if (editor.hasError('phoneLength')) {
+              <li>El teléfono completo debe tener entre 10 y 15 caracteres, incluida la lada y el signo + si corresponde.</li>
+            }
+            @if (editor.controls.category.invalid) { <li>Selecciona una categoría.</li> }
+            @if (editor.controls.location.invalid) { <li>Selecciona un punto de atención.</li> }
+          </ul>
+        }
+        <div class="wide actions">
+          <button type="submit" [disabled]="!categories().length || !locations().length">
+            {{ editingId() ? 'Guardar cambios' : 'Crear solicitud' }}
+          </button>
+          @if (editingId()) {
+            <button class="secondary" type="button" (click)="reset()">Cancelar</button>
+          }
+        </div>
+      </fieldset>
+    </form>
+  </section>
+
+  <section class="panel" aria-labelledby="request-list">
+    <h2 id="request-list">Solicitudes registradas</h2>
+    <form [formGroup]="filters" (ngSubmit)="applyFilters()">
+      <fieldset [disabled]="loading() || busy()">
+        <label class="wide">Buscar <input type="search" formControlName="search" placeholder="Folio, título, descripción o contacto"></label>
+        <label>Estado
+          <select formControlName="status">
+            <option value="">Todos</option>
+            @for (status of statusOptions; track status) {
+              <option [value]="status">{{ statuses[status] }}</option>
+            }
+          </select>
+        </label>
+        <label>Prioridad
+          <select formControlName="priority">
+            <option value="">Todas</option>
+            @for (priority of priorityOptions; track priority) {
+              <option [value]="priority">{{ priorities[priority] }}</option>
+            }
+          </select>
+        </label>
+        <label>Categoría
+          <select formControlName="category">
+            <option value="">Todas</option>
+            @for (category of categories(); track category.id) {
+              <option [value]="category.id">{{ category.name }}</option>
+            }
+          </select>
+        </label>
+        <label>Punto de atención
+          <select formControlName="location">
+            <option value="">Todos</option>
+            @for (location of locations(); track location.id) {
+              <option [value]="location.id">{{ location.name }}</option>
+            }
+          </select>
+        </label>
+        <div class="wide actions">
+          <button type="submit">Aplicar filtros</button>
+          <button class="secondary" type="button" (click)="clearFilters()">Limpiar filtros</button>
+        </div>
+      </fieldset>
+    </form>
+    @if (loading()) {
+      <p role="status">Cargando solicitudes…</p>
+    } @else if (listFailed()) {
+      <p role="alert">No se pudo cargar la lista de solicitudes.</p>
+      <button type="button" [disabled]="busy()" (click)="loadRequests()">Reintentar</button>
+    } @else if (requests().length) {
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="request-list">
+        <table aria-labelledby="request-list">
+          <thead>
+            <tr><th>Solicitud</th><th>Categoría</th><th>Punto de atención</th><th>Profesional</th>
+              <th>Solicitante</th><th>Estado</th><th>Prioridad</th><th>Acciones</th></tr>
+          </thead>
+          <tbody>
+            @for (request of requests(); track request.id) {
+              <tr>
+                <th scope="row">{{ request.title }}<small>{{ request.folio }}</small></th>
+                <td>{{ request.category?.name ?? 'Sin categoría' }}</td>
+                <td>{{ request.location?.name ?? 'Sin punto asignado' }}</td>
+                <td>{{ request.professional?.fullName ?? 'Sin asignar' }}</td>
+                <td>{{ request.requestedBy?.name ?? 'Usuario no disponible' }}</td>
+                <td>{{ statuses[request.status] }}</td>
+                <td>{{ priorities[request.priority] }}</td>
+                <td><div class="actions">
+                  <button class="secondary" type="button" [disabled]="busy()" (click)="edit(request, titleInput)">Editar</button>
+                  <button class="danger" type="button" [disabled]="busy()" (click)="remove(request)">Eliminar</button>
+                </div></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p role="status">No hay solicitudes para los filtros seleccionados.</p>
+    }
+  </section>
+}
